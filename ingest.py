@@ -9,7 +9,6 @@ Usage:
 """
 import argparse
 import hashlib
-import io
 import sys
 from pathlib import Path
 
@@ -17,34 +16,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from ingestion import SUPPORTED_EXTENSIONS as SUPPORTED
+from ingestion import chunk_text, extract_text
 from vector_store import get_chroma_for_ingest
-
-SUPPORTED = {".pdf", ".docx", ".txt", ".md"}
-
-
-def extract_text(path: Path) -> str:
-    ext = path.suffix.lower()
-    raw = path.read_bytes()
-    if ext == ".pdf":
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(raw))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    if ext == ".docx":
-        from docx import Document
-        doc = Document(io.BytesIO(raw))
-        return "\n".join(p.text for p in doc.paragraphs)
-    return raw.decode("utf-8", errors="replace")
-
-
-def chunk(text: str, size: int = 800, overlap: int = 100) -> list[str]:
-    words = text.split()
-    chunks, start = [], 0
-    while start < len(words):
-        c = " ".join(words[start : start + size])
-        if c.strip():
-            chunks.append(c)
-        start += size - overlap
-    return chunks
 
 
 def main() -> None:
@@ -75,13 +49,14 @@ def main() -> None:
         if f.suffix.lower() not in SUPPORTED:
             continue
         try:
-            text = extract_text(f)
-            chunks = chunk(text, args.chunk_size, args.overlap)
+            raw = f.read_bytes()
+            text = extract_text(f.suffix.lower(), raw)
+            chunks = chunk_text(text, args.chunk_size, args.overlap)
             if not chunks:
                 print(f"  skip  {f.name} — no text extracted")
                 continue
 
-            file_hash = hashlib.sha256(f.read_bytes()).hexdigest()[:16]
+            file_hash = hashlib.sha256(raw).hexdigest()[:16]
             ids = [f"{file_hash}_{i}" for i in range(len(chunks))]
 
             existing = set(db._collection.get(ids=ids)["ids"])

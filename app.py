@@ -1,5 +1,4 @@
 import hashlib
-import io
 import os
 import uuid
 
@@ -12,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from ingestion import SUPPORTED_EXTENSIONS, chunk_text, extract_text
 from rag import rag_stream
 from vector_store import get_chroma_for_ingest
 
@@ -23,8 +23,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
 
 
 # ── Models ─────────────────────────────────────────────────────────────────────
@@ -92,8 +90,8 @@ async def ingest(file: UploadFile):
         raise HTTPException(status_code=400, detail=f"Unsupported type: {ext}")
 
     content = await file.read()
-    text = _extract_text(ext, content)
-    chunks = _chunk(text)
+    text = extract_text(ext, content)
+    chunks = chunk_text(text)
 
     if not chunks:
         raise HTTPException(status_code=422, detail="No text could be extracted from this file")
@@ -114,29 +112,3 @@ async def ingest(file: UploadFile):
         "chunks_added": len(new_chunks),
         "chunks_skipped": len(chunks) - len(new_chunks),
     }
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-
-def _extract_text(ext: str, content: bytes) -> str:
-    if ext == ".pdf":
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(content))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    if ext == ".docx":
-        from docx import Document
-        doc = Document(io.BytesIO(content))
-        return "\n".join(p.text for p in doc.paragraphs)
-    return content.decode("utf-8", errors="replace")
-
-
-def _chunk(text: str, size: int = 800, overlap: int = 100) -> list[str]:
-    words = text.split()
-    chunks, start = [], 0
-    while start < len(words):
-        chunk = " ".join(words[start : start + size])
-        if chunk.strip():
-            chunks.append(chunk)
-        start += size - overlap
-    return chunks

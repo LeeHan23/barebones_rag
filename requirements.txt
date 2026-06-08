@@ -1,15 +1,22 @@
 # Server
-fastapi
-uvicorn[standard]
-python-dotenv
-python-multipart
-requests
+fastapi>=0.135
+uvicorn[standard]>=0.41
+python-dotenv>=1.1
+python-multipart>=0.0.20
+requests>=2.32
 
-# LangChain (pinned to match bare_NutriChatbot)
-langchain==0.1.20
-langchain-community==0.0.38
-langchain-core==0.1.52
-langchain-openai==0.1.3
+# LangChain
+# NOTE: the code imports HuggingFaceEmbeddings/Chroma/ChatOllama from
+# langchain_community — these still work via compatibility shims on the
+# versions below but print LangChainDeprecationWarning. The recommended
+# fix is to install the dedicated packages and repoint the imports:
+#   langchain-huggingface  -> from langchain_huggingface import HuggingFaceEmbeddings
+#   langchain-chroma       -> from langchain_chroma import Chroma
+#   langchain-ollama       -> from langchain_ollama import ChatOllama
+langchain>=1.2
+langchain-community>=0.4
+langchain-core>=1.2
+langchain-openai>=1.1
 
 # LLM
 openai>=1.0.0
@@ -29,3 +36,7 @@ python-docx
 # peft
 # transformers
 # torch
+
+# Testing / eval (optional — dev dependencies)
+# pytest
+# httpx
